@@ -9,3 +9,9 @@ requests
 pydantic
 groq
 openai
+beautifulsoup4
+lxml
+html5lib
+Flask
+Werkzeug
+gunicorn
