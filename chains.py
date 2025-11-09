@@ -1,60 +1,72 @@
+# chains.py
 import os
+from typing import Any, List
+
+# Streamlit may not exist when running as pure API; so optional import
+try:
+    import streamlit as st
+except Exception:
+    st = None  # type: ignore
+
+from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.exceptions import OutputParserException
-from dotenv import load_dotenv
 
 load_dotenv()
 
+def _get_secret(name: str) -> str | None:
+    # Prefer Streamlit secrets, fallback to env
+    val = None
+    if st and hasattr(st, "secrets"):
+        try:
+            val = st.secrets.get(name)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+    return val or os.getenv(name)
+
 class Chain:
     def __init__(self):
-        self.llm = ChatGroq(temperature=0, groq_api_key=os.getenv("GROQ_API_KEY"), model_name="llama-3.3-70b-versatile")
-        
-    def extract_jobs(self, cleaned_text):
+        api_key = _get_secret("GROQ_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "GROQ_API_KEY not set. Add it in Streamlit Secrets or as an environment variable."
+            )
+
+        # Support both param names across versions
+        try:
+            self.llm = ChatGroq(api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0)
+        except TypeError:
+            self.llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0)
+
+    def extract_jobs(self, cleaned_text: str) -> List[dict[str, Any]]:
         prompt_extract = PromptTemplate.from_template(
-            """
-            ### SCRAPED TEXT FROM WEBSITE:
-            {page_data}
-            ### INSTRUCTION:
-            The scraped text is from the career's page of a website.
-            Your job is to extract the job postings and return them in JSON format containing the following keys: `role`, `experience`, `skills` and `description`.
-            Only return the valid JSON.
-            ### VALID JSON (NO PREAMBLE):
-            """
+            """### SCRAPED TEXT FROM WEBSITE:
+{page_data}
+### INSTRUCTION:
+The scraped text is from the careers page of a website.
+Extract job postings and return JSON with keys: role, experience, skills, description.
+Return only valid JSON (no preamble)."""
         )
         chain_extract = prompt_extract | self.llm
-        res = chain_extract.invoke(input={"page_data": cleaned_text})
+        res = chain_extract.invoke({"page_data": cleaned_text})
         try:
-            json_parser = JsonOutputParser()
-            res = json_parser.parse(res.content)
+            res_json = JsonOutputParser().parse(getattr(res, "content", res))
         except OutputParserException:
-            raise OutputParserException("Context too big. Unable to parse jobs.")
-        return res if isinstance(res, list) else [res]
-    
-    def write_mail(self, job, links):
+            raise OutputParserException("Context too big or malformed model output.")
+        return res_json if isinstance(res_json, list) else [res_json]
+
+    def write_mail(self, job: dict, links: list[str]) -> str:
         prompt_email = PromptTemplate.from_template(
-            """
-            ### JOB DESCRIPTION:
-            {job_description}
+            """### JOB DESCRIPTION:
+{job_description}
 
-            ### INSTRUCTION:
-            You are Mohan, a business development executive at AtliQ. AtliQ is an AI & Software Consulting company dedicated to facilitating
-            the seamless integration of business processes through automated tools. 
-            Over our experience, we have empowered numerous enterprises with tailored solutions, fostering scalability, 
-            process optimization, cost reduction, and heightened overall efficiency. 
-            Your job is to write a cold email to the client regarding the job mentioned above describing the capability of AtliQ 
-            in fulfilling their needs.
-            Also add the most relevant ones from the following links to showcase Atliq's portfolio: {link_list}
-            Remember you are Mohan, BDE at AtliQ. 
-            Do not provide a preamble.
-            ### EMAIL (NO PREAMBLE):
-
-            """
+### INSTRUCTION:
+You are Mohan, BDE at AtliQ (AI & Software Consulting). Write a concise, tailored cold email
+showing how AtliQ can meet the needs above. Include the most relevant portfolio links: {link_list}.
+No preamble. Output only the email in Markdown."""
         )
         chain_email = prompt_email | self.llm
         res = chain_email.invoke({"job_description": str(job), "link_list": links})
-        return res.content
-
-if __name__ == "__main__":
-    print(os.getenv("GROQ_API_KEY"))
+        return getattr(res, "content", str(res))
