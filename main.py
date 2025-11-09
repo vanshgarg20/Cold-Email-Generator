@@ -3,6 +3,7 @@ import re
 from html import escape
 from datetime import datetime
 from typing import Any, Dict, List
+from pathlib import Path
 
 import streamlit as st
 from langchain_community.document_loaders import WebBaseLoader
@@ -11,6 +12,13 @@ from chains import Chain
 from portfolio import Portfolio
 from utils import clean_text
 
+if "portfolio" not in st.session_state:
+    csv_path = "my_portfolio.csv"  # repo root
+    st.session_state["portfolio"] = Portfolio(csv_path=csv_path)
+    with st.spinner("📚 Loading your portfolio…"):
+        st.session_state["portfolio"].load_portfolio()
+    st.toast("Portfolio loaded", icon="📁")
+    
 # --------------------- PAGE CONFIG ---------------------
 st.set_page_config(page_title="Cold Email Generator", page_icon="📧", layout="wide")
 
