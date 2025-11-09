@@ -326,3 +326,12 @@ if generate:
         except Exception as e:
             st.error(f"⚠️ An error occurred: {e}")
 
+except Exception as e:
+    msg = str(e).lower()
+    if "rate_limit" in msg or "429" in msg:
+        st.error("🚦 Groq rate limit reached for your org. Please wait a few minutes and try again, "
+                 "or switch to a smaller input / higher quota.")
+    else:
+        st.error(f"⚠️ An error occurred: {e}")
+
+
