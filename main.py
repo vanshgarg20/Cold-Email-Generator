@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, List
 
 import streamlit as st
+import streamlit.components.v1 as components
 from langchain_community.document_loaders import WebBaseLoader
 
 from chains import Chain
@@ -28,11 +29,10 @@ if "portfolio" not in st.session_state:
 chain: Chain = st.session_state["chain"]
 portfolio: Portfolio = st.session_state["portfolio"]
 
-# --------------------- STYLES (base + responsive + copy button) ---------------------
+# --------------------- STYLES (base + responsive) ---------------------
 st.markdown(
     """
 <style>
-/* base layout */
 .block-container{max-width:1200px;padding-top:3.75rem;padding-bottom:3rem;overflow:visible}
 @keyframes pulseGradient{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 .hero-wrap{display:inline-flex;align-items:center;gap:.9rem;margin:.25rem auto .4rem;position:relative;left:50%;transform:translateX(-50%);overflow:visible}
@@ -46,26 +46,6 @@ st.markdown(
 hr{border:none;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent)}
 .stTextInput > div > div > input{height:3rem;font-size:1rem}
 pre, pre code { white-space: pre-wrap !important; word-break: break-word !important }
-
-/* copyable plain email block */
-.plain-email{margin-top:.5rem}
-.plain-email .email-toolbar{display:flex;justify-content:flex-end;gap:.5rem;margin-bottom:.4rem}
-.copy-btn{
-  border:1px solid rgba(255,255,255,.15);
-  background:rgba(255,255,255,.08);
-  padding:.35rem .7rem;border-radius:8px;cursor:pointer;
-}
-.copy-btn:active{transform:translateY(1px)}
-.plain-email textarea{
-  width:100%;height:300px; /* keep scrollbar */
-  border:1px solid rgba(255,255,255,.15);
-  background:rgba(255,255,255,.03);
-  color:inherit;border-radius:12px;padding:.75rem;
-  font: 0.92rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  resize:vertical; /* user can resize; scrollbar stays */
-}
-
-/* tablets */
 @media (max-width: 900px){
   .block-container{max-width:100%;padding-top:2.9rem;padding-left:1rem;padding-right:1rem}
   .hero-logo{width:48px;height:48px;padding:5px}
@@ -77,8 +57,6 @@ pre, pre code { white-space: pre-wrap !important; word-break: break-word !import
   .badge{font-size:.72rem}
   .stTextInput > div > div > input{height:2.6rem;font-size:.95rem}
 }
-
-/* phones - extra top padding to prevent title clipping under Streamlit header */
 @media (max-width: 600px){
   .block-container{padding-top:3.3rem;padding-left:.75rem;padding-right:.75rem}
   .hero-wrap{gap:.6rem}
@@ -92,7 +70,6 @@ pre, pre code { white-space: pre-wrap !important; word-break: break-word !import
   .stTextInput > div > div > input{height:2.4rem;font-size:.95rem}
   section.main .stColumns { flex-direction: column !important; gap: .75rem !important }
   .stButton > button, .stDownloadButton > button { width:100% !important }
-  .plain-email textarea{height:260px}
 }
 </style>
 """,
@@ -128,17 +105,16 @@ with st.sidebar:
 URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 
 def to_plain_text(s: str) -> str:
-    """Convert potential markdown-ish output to plain text."""
-    s = re.sub(r"```.*?```", "", s, flags=re.S)                 # fenced code blocks
-    s = re.sub(r"`([^`]*)`", r"\1", s)                          # inline code
-    s = re.sub(r"!\[.*?\]\(.*?\)", "", s)                       # images
-    s = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1", s)                 # links → text
-    s = re.sub(r"[*_]{1,3}([^*_]+)[*_]{1,3}", r"\1", s)         # bold/italics
-    s = re.sub(r"^\s{0,3}#{1,6}\s*", "", s, flags=re.M)         # headings
-    s = re.sub(r"^\s{0,3}>\s*", "", s, flags=re.M)              # blockquotes
-    s = re.sub(r"^\s*[-*_]{3,}\s*$", "", s, flags=re.M)         # horizontal rules
-    s = re.sub(r"^\s*[-*•+]\s+", "", s, flags=re.M)             # bullets
-    s = re.sub(r"\n{3,}", "\n\n", s)                            # collapse blanks
+    s = re.sub(r"```.*?```", "", s, flags=re.S)
+    s = re.sub(r"`([^`]*)`", r"\1", s)
+    s = re.sub(r"!\[.*?\]\(.*?\)", "", s)
+    s = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1", s)
+    s = re.sub(r"[*_]{1,3}([^*_]+)[*_]{1,3}", r"\1", s)
+    s = re.sub(r"^\s{0,3}#{1,6}\s*", "", s, flags=re.M)
+    s = re.sub(r"^\s{0,3}>\s*", "", s, flags=re.M)
+    s = re.sub(r"^\s*[-*_]{3,}\s*$", "", s, flags=re.M)
+    s = re.sub(r"^\s*[-*•+]\s+", "", s, flags=re.M)
+    s = re.sub(r"\n{3,}", "\n\n", s)
     return s.strip()
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -164,36 +140,57 @@ def download_name(prefix="email", ext="txt"):
     return f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
 
 def render_plain_email(idx: int, text: str):
-    """Show email in a readonly <textarea> with a working Copy button (no 'Copy code')."""
-    st.markdown(
-        f"""
-        <div class="plain-email">
-          <div class="email-toolbar">
-            <button class="copy-btn" id="copy_btn_{idx}">Copy</button>
-          </div>
-          <textarea id="email_{idx}" readonly>{escape(text)}</textarea>
-        </div>
+    """
+    Email textarea + working Copy button.
+    Uses placeholders (%%IDX%%, %%TEXT%%) to avoid Python f-string brace issues.
+    """
+    template = """<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:transparent;color:inherit;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial,'Noto Sans',sans-serif;">
+    <div style="margin-top:8px;">
+      <div style="display:flex;justify-content:flex-end;gap:.5rem;margin-bottom:.4rem">
+        <button id="copy_btn_%%IDX%%"
+          style="border:1px solid rgba(255,255,255,.15);
+                 background:rgba(255,255,255,.08);
+                 padding:.35rem .7rem;border-radius:8px;cursor:pointer;">
+          Copy
+        </button>
+      </div>
+      <textarea id="email_%%IDX%%" readonly
+        style="width:100%;height:300px;border:1px solid rgba(255,255,255,.15);
+               background:rgba(255,255,255,.03);color:inherit;border-radius:12px;
+               padding:.75rem;font: 0.92rem/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+               resize:vertical;">%%TEXT%%</textarea>
+    </div>
 
-        <script>
-        const copyBtn{idx} = document.getElementById("copy_btn_{idx}");
-        const textarea{idx} = document.getElementById("email_{idx}");
-        if (copyBtn{idx} && textarea{idx}) {{
-            copyBtn{idx}.addEventListener("click", async () => {{
-                try {{
-                    await navigator.clipboard.writeText(textarea{idx}.value);
-                    const original = copyBtn{idx}.innerText;
-                    copyBtn{idx}.innerText = "Copied!";
-                    setTimeout(() => copyBtn{idx}.innerText = original, 1300);
-                }} catch (err) {{
-                    console.error("Copy failed:", err);
-                }}
-            }});
-        }}
-        </script>
-        """,
-        unsafe_allow_html=True,
+    <script>
+      (function(){
+        const btn = document.getElementById('copy_btn_%%IDX%%');
+        const ta  = document.getElementById('email_%%IDX%%');
+        if (btn && ta) {
+          btn.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(ta.value);
+              const old = btn.innerText;
+              btn.innerText = 'Copied!';
+              setTimeout(() => btn.innerText = old, 1300);
+            } catch (e) {
+              console.error('Copy failed', e);
+            }
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>"""
+
+    html = (
+        template
+        .replace("%%IDX%%", str(idx))
+        .replace("%%TEXT%%", escape(text))
     )
 
+    components.html(html, height=360, scrolling=False)
 
 # --------------------- HERO ---------------------
 st.markdown(
@@ -258,16 +255,14 @@ if generate:
                 render_skill_chips(skills)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # Ask LLM to write (links intentionally empty; email should be plain text)
+                # Ask LLM to write (plain text)
                 job_with_prefs = {**job, "tone": tone_choice, "cta": cta_choice}
                 with st.spinner("✍️ Writing tailored email…"):
                     email_md = chain.write_mail(job_with_prefs, [])
 
-                # Plain text conversion + UI
                 email_txt = to_plain_text(email_md)
                 render_plain_email(i, email_txt)
 
-                # Download .txt
                 st.download_button(
                     label="⬇️ Download Email (.txt)",
                     data=email_txt,
