@@ -48,6 +48,26 @@ st.markdown(
 hr{border:none;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent)}
 .stTextInput > div > div > input{height:3rem;font-size:1rem}
 pre, pre code { white-space: pre-wrap !important; word-break: break-word !important }
+
+/* Email viewer (no iframe) */
+.plain-email{ margin-top:.5rem; margin-bottom:.75rem; }
+.email-toolbar{ display:flex; justify-content:flex-end; gap:.5rem; margin-bottom:.5rem; }
+.copy-btn{
+  border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.08);
+  padding:.35rem .7rem; border-radius:8px; cursor:pointer; color:inherit;
+}
+.copy-btn:active{ transform:translateY(1px) }
+.emailbox{
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:12px;
+  padding:14px;
+  font:0.92rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere;
+}
+.hidden-copy{ position:absolute; left:-9999px; top:-9999px; height:0; width:0; opacity:0; }
+
 @media (max-width: 900px){
   .block-container{max-width:100%;padding-top:2.9rem;padding-left:1rem;padding-right:1rem}
   .hero-logo{width:48px;height:48px;padding:5px}
@@ -72,9 +92,10 @@ pre, pre code { white-space: pre-wrap !important; word-break: break-word !import
   .stTextInput > div > div > input{height:2.4rem;font-size:.95rem}
   section.main .stColumns { flex-direction: column !important; gap: .75rem !important }
   .stButton > button, .stDownloadButton > button { width:100% !important }
+  .emailbox{ font-size:.98rem; line-height:1.5; padding:15px 13px; }
 }
 </style>
-
+""",
     unsafe_allow_html=True,
 )
 
