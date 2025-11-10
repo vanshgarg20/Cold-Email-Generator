@@ -2,7 +2,7 @@
 import re
 from html import escape
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, List
 from pathlib import Path
 
 import streamlit as st
@@ -12,130 +12,27 @@ from chains import Chain
 from portfolio import Portfolio
 from utils import clean_text
 
+# --------------------- PAGE CONFIG ---------------------
+st.set_page_config(page_title="Cold Email Generator", page_icon="📧", layout="wide")
+
+# --------------------- ONE-TIME STATE ---------------------
+if "chain" not in st.session_state:
+    st.session_state["chain"] = Chain()
+
 if "portfolio" not in st.session_state:
     csv_path = "my_portfolio.csv"  # repo root
     st.session_state["portfolio"] = Portfolio(csv_path=csv_path)
     with st.spinner("📚 Loading your portfolio…"):
         st.session_state["portfolio"].load_portfolio()
     st.toast("Portfolio loaded", icon="📁")
-    
-# --------------------- PAGE CONFIG ---------------------
-st.set_page_config(page_title="Cold Email Generator", page_icon="📧", layout="wide")
 
-# --------------------- CUSTOM STYLES ---------------------
-st.markdown(
-    """
-    <style>
-    /* Give the whole page a bit more breathing room at the very top
-       and make sure nothing gets clipped visually. */
-    .block-container {
-        max-width: 1200px;
-        padding-top: 3.75rem;   /* ↑ was 2rem, increased to fix header being cut */
-        padding-bottom: 3rem;
-        overflow: visible;
-    }
+chain: Chain = st.session_state["chain"]
+portfolio: Portfolio = st.session_state["portfolio"]
 
-    /* Animated gradient keyframes for title + logo background */
-    @keyframes pulseGradient {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-    }
-
-    /* Header layout */
-    .hero-wrap {
-        display: inline-flex;
-        align-items: center;
-        gap: .9rem;
-        margin: .25rem auto .4rem;
-        position: relative;
-        overflow: visible;
-        left: 50%;
-        transform: translateX(-50%);
-    }
-
-    /* Logo tile */
-    .hero-logo {
-        width: 56px;                 /* ↑ slightly larger so the icon isn't cramped */
-        height: 56px;
-        padding: 6px;                /* inner padding prevents the icon from touching edges */
-        border-radius: 14px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #00c6ff, #7b61ff, #ff6ec7);
-        background-size: 200% 200%;
-        animation: pulseGradient 6s ease infinite;
-        box-shadow: 0 10px 24px rgba(0,0,0,.25);
-        overflow: visible;
-    }
-    .hero-logo svg {
-        width: 32px; height: 32px;
-        fill: white;
-        filter: drop-shadow(0 0 4px rgba(255,255,255,0.35));
-    }
-
-    /* Animated gradient title (make line-height generous so it never clips) */
-    .hero-title {
-        font-size: 3rem;
-        font-weight: 800;
-        line-height: 1.12;           /* ↑ prevents top/bottom clipping of glyphs */
-        background: linear-gradient(90deg, #00c6ff, #7b61ff, #ff6ec7);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-size: 220% 220%;
-        animation: pulseGradient 8s ease infinite;
-        white-space: nowrap;
-    }
-
-    .hero-sub {
-        text-align: center;
-        font-size: 1.12rem;
-        color: #cfcfcf;
-        margin: 0 0 1.6rem 0;
-    }
-
-    .card {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 18px;
-        padding: 1.2rem 1.4rem;
-        box-shadow: 0 12px 30px rgba(0,0,0,0.25);
-        backdrop-filter: blur(8px);
-    }
-    .chip {
-        display:inline-block;
-        padding:.3rem .65rem;
-        margin:.18rem .3rem .18rem 0;
-        border-radius:999px;
-        border:1px solid rgba(255,255,255,0.15);
-        font-size:.85rem;
-    }
-    .badge {
-        display:inline-block;
-        padding:.25rem .55rem;
-        border-radius:8px;
-        background: rgba(255,255,255,0.1);
-        border:1px solid rgba(255,255,255,0.15);
-        font-size:.8rem;
-        margin-left:.35rem;
-        vertical-align: middle;
-    }
-    hr {
-        border:none; height:1px;
-        background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent);
-    }
-    .stTextInput > div > div > input { height:3rem; font-size:1rem; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# --------------------- RESPONSIVE STYLES ---------------------
+# --------------------- STYLES ---------------------
 st.markdown(
     """
 <style>
-/* base */
 .block-container{max-width:1200px;padding-top:3.75rem;padding-bottom:3rem;overflow:visible}
 @keyframes pulseGradient{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 .hero-wrap{display:inline-flex;align-items:center;gap:.9rem;margin:.25rem auto .4rem;position:relative;left:50%;transform:translateX(-50%);overflow:visible}
@@ -230,22 +127,29 @@ def render_skill_chips(skills: List[str]):
     chips = " ".join(f"<span class='chip'>{escape(s)}</span>" for s in skills)
     st.markdown(chips, unsafe_allow_html=True)
 
-def download_name(prefix="email"):
-    return f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+def download_name(prefix="email", ext="txt"):
+    return f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
 
-# --------------------- SESSION SETUP ---------------------
-if "chain" not in st.session_state:
-    st.session_state["chain"] = Chain()
-if "portfolio" not in st.session_state:
-    st.session_state["portfolio"] = Portfolio()
-    with st.spinner("📚 Loading your portfolio…"):
-        st.session_state["portfolio"].load_portfolio()
-    st.toast("Portfolio loaded", icon="📁")
+# --- make email plain text (remove markdown/hashtags/bullets/etc.)
+_md_headers = re.compile(r"^\s{0,3}#{1,6}\s*", re.MULTILINE)
+_md_bullets = re.compile(r"^\s*[-*+]\s+", re.MULTILINE)
+_md_bq      = re.compile(r"^\s*>\s?", re.MULTILINE)
+_md_code    = re.compile(r"`{1,3}([^`]+)`{1,3}")
+_md_links   = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+_md_emph    = re.compile(r"[*_]{1,3}([^*_]+)[*_]{1,3}")
 
-chain: Chain = st.session_state["chain"]
-portfolio: Portfolio = st.session_state["portfolio"]
+def to_plain_text(md: str) -> str:
+    t = _md_headers.sub("", md)
+    t = _md_bullets.sub("", t)
+    t = _md_bq.sub("", t)
+    t = _md_code.sub(r"\1", t)
+    t = _md_links.sub(r"\1 (\2)", t)
+    t = _md_emph.sub(r"\1", t)
+    # collapse extra blank lines
+    t = re.sub(r"\n{3,}", "\n\n", t).strip()
+    return t
 
-# --------------------- HERO SECTION ---------------------
+# --------------------- HERO ---------------------
 st.markdown(
     """
     <div class="hero-wrap">
@@ -263,12 +167,12 @@ st.markdown(
 
 col1, col2 = st.columns([3, 1])
 with col1:
-    default_url = st.session_state.get("preset_url", PRESETS["Nike – SWE II"])
+    default_url = st.session_state.get("preset_url", "https://careers.nike.com/software-engineer-ii-itc/job/R-71954")
     url_input = st.text_input("Job Post URL", value=default_url, placeholder="https://company.com/careers/role")
 with col2:
     generate = st.button("🚀 Generate", type="primary", use_container_width=True)
 
-# --------------------- MAIN APP LOGIC ---------------------
+# --------------------- MAIN ---------------------
 if generate:
     if not url_input.strip() or not URL_RE.match(url_input.strip()):
         st.error("Please enter a valid `http(s)://` URL.")
@@ -299,7 +203,7 @@ if generate:
                     unsafe_allow_html=True,
                 )
 
-                # Single content card (portfolio section removed per your request)
+                # Card: summary only (no portfolio grid)
                 st.markdown("<div class='card'>", unsafe_allow_html=True)
                 st.subheader("Summary", anchor=False)
                 st.write(desc)
@@ -308,30 +212,40 @@ if generate:
                 render_skill_chips(skills)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # Write email — pass preferences inside the job dict (no kwargs)
+                # Ask LLM to write; we pass empty links list, Chain handles plain output
                 job_with_prefs = {**job, "tone": tone_choice, "cta": cta_choice}
                 with st.spinner("✍️ Writing tailored email…"):
                     email_md = chain.write_mail(job_with_prefs, [])
 
-                st.code(email_md, language="markdown")
-                st.download_button(
-                    label="⬇️ Download Email (.md)",
-                    data=email_md,
-                    file_name=download_name(),
-                    mime="text/markdown",
-                    key=f"download_email_{i}", 
-                    use_container_width=True,
-                    key=f"download_button_{i}",
+                # ✅ Show as PLAIN TEXT
+                email_txt = to_plain_text(email_md)
+
+                # Use a text area for easy copy on phone/desktop
+                st.text_area(
+                    label="Generated Email (plain text)",
+                    value=email_txt,
+                    height=300,
+                    key=f"email_text_{i}",
                 )
+
+                # ✅ Unique download key; .txt file
+                st.download_button(
+                    label="⬇️ Download Email (.txt)",
+                    data=email_txt,
+                    file_name=download_name(ext="txt"),
+                    mime="text/plain",
+                    use_container_width=True,
+                    key=f"download_email_{i}",
+                )
+
                 st.markdown("<hr />", unsafe_allow_html=True)
 
         except Exception as e:
-    msg = str(e).lower()
-    if "rate_limit" in msg or "429" in msg:
-        st.error("🚦 Groq rate limit reached for your org. Please wait a few minutes and try again, "
-                 "or switch to a smaller input / higher quota.")
-    else:
-        st.error(f"⚠️ An error occurred: {e}")
-
-
-
+            msg = str(e).lower()
+            if "rate limit" in msg or "429" in msg:
+                st.error(
+                    "🚦 Groq rate limit reached for your org. Please try again later, "
+                    "or switch to a smaller model / separate API key."
+                )
+            else:
+                st.error(f"⚠️ An error occurred: {e}")
