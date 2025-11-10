@@ -142,16 +142,23 @@ Return ONLY JSON (no extra text)."""
     def write_mail(self, job: dict, links: List[str]) -> str:
         """Generate cold email using Groq first, fallback to Gemini."""
         prompt = PromptTemplate.from_template(
-    """### JOB DESCRIPTION:
+            """You are Mohan, a Business Development Executive at AtliQ (an AI & Software Consulting company).
+
+Write a concise, professional **plain text** cold email about the job below.
+RULES:
+- Plain text only: no headings, no lists, no bullets, no markdown symbols (#, *, -, >, _, `, [], ()).
+- 120–170 words total.
+- Start with a clear "Subject: ..." line.
+- Then a greeting (e.g., Dear Hiring Manager,).
+- Mention AtliQ’s capabilities relevant to the job.
+- Include 1–2 relevant portfolio links inline (full URLs), woven naturally in a sentence.
+- End with a clear call-to-action and a polite sign-off.
+- Return ONLY the email body; no extra notes.
+
+JOB:
 {job_description}
 
-### INSTRUCTION:
-You are Mohan, a Business Development Executive at AtliQ, an AI & Software Consulting company.
-Write a short, professional cold email to the company about the job above.
-Keep the tone natural and business-friendly — no Markdown, no headings, no bullet points, no hashtags, no special formatting.
-Include relevant portfolio links naturally within the email text.
-Return only plain text — a single email body ready to send."""
-)
+        )
 
         attempts = []
 
@@ -175,7 +182,7 @@ Return only plain text — a single email body ready to send."""
                 chain = prompt | llm
                 res = _invoke_with_retry(
                     chain,
-                    {"job_description": str(job), "link_list": links},
+                    {"job_description": str(job)},
                     retries=1,
                 )
                 return getattr(res, "content", str(res))
