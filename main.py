@@ -50,8 +50,8 @@ hr{border:none;height:1px;background:linear-gradient(90deg,transparent,rgba(255,
 pre, pre code { white-space: pre-wrap !important; word-break: break-word !important }
 
 /* ====================== EMAIL VIEWER ====================== */
-.plain-email{ margin-top:.4rem; margin-bottom:.25rem; }  /* ultra tight bottom margin */
-.email-toolbar{ display:flex; justify-content:flex-end; gap:.5rem; margin-bottom:.35rem; }
+.plain-email{ margin-top:.3rem; margin-bottom:.15rem; }  /* almost zero gap */
+.email-toolbar{ display:flex; justify-content:flex-end; gap:.5rem; margin-bottom:.25rem; }
 .copy-btn{
   border:1px solid rgba(255,255,255,.15);
   background:rgba(255,255,255,.08);
@@ -70,7 +70,7 @@ pre, pre code { white-space: pre-wrap !important; word-break: break-word !import
 
 /* Tight spacing before Download button */
 div[data-testid="stDownloadButton"]{
-  margin-top:3px !important;      /* tighter gap */
+  margin-top:1px !important;      /* almost touching */
   margin-bottom:0 !important;
   padding-top:0 !important;
 }
@@ -102,9 +102,9 @@ div[data-testid="stDownloadButton"]{
   section.main .stColumns { flex-direction: column !important; gap: .75rem !important }
   .stButton > button, .stDownloadButton > button { width:100% !important }
 
-  /* ultra-tight for mobile */
-  .plain-email{ margin-bottom:.22rem; }
-  div[data-testid="stDownloadButton"]{ margin-top:2px !important; }
+  /* mobile: super-tight spacing */
+  .plain-email{ margin-bottom:.1rem; }
+  div[data-testid="stDownloadButton"]{ margin-top:1px !important; }
   .emailbox{ font-size:.98rem; line-height:1.5; padding:15px 13px; }
 }
 </style>
