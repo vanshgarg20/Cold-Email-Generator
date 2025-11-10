@@ -162,34 +162,44 @@ import streamlit.components.v1 as components
 from html import escape
 
 # ---- (optional) tweakable knobs at top of your file ----
-# knobs (upar rakh lo file ke): feel free to tune
-EMAIL_BOX_DESKTOP_HEIGHT = 300   # minimum visible height desktop
-EMAIL_FONT_LINE_PX       = 22    # approx line height in px inside email box
-EMAIL_BASE_PADDING_PX    = 180   # header + paddings + breathing room
-EMAIL_EXTRA_MARGIN_PX    = 80    # bottom safety so Download button kabhi overlap na ho
+# ---- Optional knobs (upar rakh lo) ----
+EMAIL_BOX_DESKTOP_HEIGHT = 300   # medium desktop look (min visual height)
+EMAIL_FONT_SIZE_DESKTOP  = "0.92rem"
+EMAIL_FONT_SIZE_MOBILE   = "0.98rem"
+EMAIL_LINE_HEIGHT        = 1.5   # CSS line-height
+EMAIL_LINE_PX_DESKTOP    = 22    # px approx (estimate only)
+EMAIL_LINE_PX_MOBILE     = 26    # px approx (estimate only)
 
-def _estimate_iframe_height(text: str) -> int:
-    """
-    Rough but safe height estimate so the Download button never overlaps.
-    We over-estimate intentionally (better extra space than overlap).
-    """
-    # assume ~88 chars per line on desktop width; wrapped text increases lines
-    wrap_at = 88
-    lines = 0
+import math
+import streamlit.components.v1 as components
+from html import escape
+
+def _estimate_iframe_height_for(text: str) -> int:
+    # Rough lines on desktop & mobile, pick the larger to avoid cut on phone
+    wrap_d = 90   # ~chars per line desktop
+    wrap_m = 38   # ~chars per line narrow phones
+    lines_d = 0
+    lines_m = 0
     for raw in text.splitlines() or [""]:
-        # at least 1 line even if empty
-        lines += max(1, math.ceil(max(1, len(raw)) / wrap_at))
-    est = EMAIL_BASE_PADDING_PX + lines * EMAIL_FONT_LINE_PX + EMAIL_EXTRA_MARGIN_PX
-    # clamp within sane bounds
-    return max(EMAIL_BOX_DESKTOP_HEIGHT + 140, min(est, 3000))
+        L = max(1, len(raw))
+        lines_d += max(1, math.ceil(L / wrap_d))
+        lines_m += max(1, math.ceil(L / wrap_m))
+    est_d = 140 + lines_d * EMAIL_LINE_PX_DESKTOP   # padding + lines
+    est_m = 160 + lines_m * EMAIL_LINE_PX_MOBILE    # padding + lines
+    est   = max(est_d, est_m)
+    # Add a tiny bottom buffer so first paint pe bhi overlap na ho
+    est  += 40
+    # Clamp: at least desktop min, at most 4000
+    return max(EMAIL_BOX_DESKTOP_HEIGHT + 80, min(est, 4000))
 
 def render_plain_email(idx: int, text: str):
     """
-    Clean email viewer (no internal scroll, no overlap with Download button).
-    Uses a non-focusable <pre> (no blue/white outline). Includes a hidden textarea for Copy.
-    Height is estimated on Python side to avoid JS timing issues on mobile/desktop.
+    FINAL: No inner scroll, no overlap, no extra gap.
+    - Desktop: medium look (min height), iframe auto-resizes to exact content.
+    - Mobile: full content (same lines/words), iframe auto-resizes (no cut).
+    - Copy button works; theme colors used.
     """
-    height = _estimate_iframe_height(text)
+    initial_height = _estimate_iframe_height_for(text)
 
     template = """<!doctype html>
 <html>
@@ -198,49 +208,48 @@ def render_plain_email(idx: int, text: str):
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <style>
       :root{
-        --bg: %%BG%%;
-        --tx: %%TX%%;
-        --border: %%BORDER%%;
-        --btnbg: %%BTN_BG%%;
-        --areabg: %%AREA_BG%%;
-        --radius: 12px;
+        --bg: %%BG%%; --tx: %%TX%%; --border: %%BORDER%%; --btnbg: %%BTN_BG%%; --areabg: %%AREA_BG%%;
+        --radius: 12px; --fs-d: %%FS_DESKTOP%%; --fs-m: %%FS_MOBILE%%; --lh: %%LH%%;
+        --h-desk: %%H_DESKTOP%%px;
       }
       html,body{
         margin:0; padding:0; background:var(--bg); color:var(--tx);
         font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial,'Noto Sans',sans-serif;
-        overflow:hidden; /* iframe ke andar koi scroll nahi */
+        overflow:hidden; /* iframe ke andar scroll nahi chahiye */
       }
       .wrap{ width:100%; }
-      .toolbar{
-        display:flex; justify-content:flex-end; gap:.5rem; margin:0 0 8px 0;
-      }
+      .toolbar{ display:flex; justify-content:flex-end; gap:.5rem; margin:0 0 8px 0; }
       .btn{
         border:1px solid var(--border); background:var(--btnbg); color:var(--tx);
         padding:.35rem .7rem; border-radius:8px; cursor:pointer; font-size:.9rem;
       }
       .btn:active{ transform:translateY(1px); }
 
-      /* Email block */
+      /* Non-focus email block (no focus ring) */
       .emailbox{
         background:var(--areabg);
         border:1px solid var(--border);
         border-radius:var(--radius);
-        padding:16px 14px;
-        margin:0 0 16px 0;
-        font: 0.98rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-        white-space:pre-wrap;
-        word-break:break-word;
-        overflow-wrap:anywhere;
+        padding:14px;
+        font: var(--fs-d)/var(--lh) ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+        white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere;
+        margin:0; /* no big extra margins */
       }
       .emailbox:focus, .emailbox:focus-visible{ outline:0; box-shadow:none; }
 
-      /* Hidden textarea for copy (exact line breaks) */
-      textarea.hidden-copy{
-        position:absolute; left:-9999px; top:-9999px; height:0; width:0; opacity:0;
+      /* Desktop: give a visual floor height (looks like medium box) */
+      @media (min-width:601px){
+        .emailbox{ min-height:var(--h-desk); }
+      }
+      /* Mobile: comfortable font; natural height */
+      @media (max-width:600px){
+        .emailbox{ font-size:var(--fs-m); line-height:var(--lh); padding:16px 14px; }
       }
 
-      /* Bottom spacer ensures safe room even if device reflows late */
-      .spacer{ height: 24px; }
+      /* Small spacer so Download button has breathing room (not huge) */
+      .spacer{ height: 12px; }
+      /* Hidden textarea for copy preserving linebreaks */
+      textarea.hidden-copy{ position:absolute; left:-9999px; top:-9999px; height:0; width:0; opacity:0; }
     </style>
   </head>
   <body>
@@ -248,7 +257,6 @@ def render_plain_email(idx: int, text: str):
       <div class="toolbar">
         <button id="copy_btn_%%IDX%%" class="btn">Copy</button>
       </div>
-
       <pre id="email_view_%%IDX%%" class="emailbox">%%TEXT%%</pre>
       <div class="spacer"></div>
       <textarea id="copy_src_%%IDX%%" class="hidden-copy" readonly>%%TEXT%%</textarea>
@@ -269,6 +277,26 @@ def render_plain_email(idx: int, text: str):
             }catch(e){ console.error('Copy failed', e); }
           });
         }
+
+        // Exact fit — measure wrapper's real height and set iframe to it.
+        function fit(){
+          try{
+            const wrap = document.querySelector('.wrap');
+            const h = Math.ceil(wrap.getBoundingClientRect().height) + 8; // tiny padding
+            if (window.frameElement) window.frameElement.style.height = h + 'px';
+            document.documentElement.style.height = h + 'px';
+          }catch(_){}
+        }
+        // Run multiple times to defeat late font/layout reflows
+        if (window.ResizeObserver){
+          const ro = new ResizeObserver(fit);
+          ro.observe(document.body);
+          ro.observe(document.querySelector('.wrap'));
+        }
+        window.addEventListener('load', fit);
+        window.addEventListener('resize', fit);
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+        setTimeout(fit, 50); setTimeout(fit, 250); setTimeout(fit, 800);
       })();
     </script>
   </body>
@@ -278,15 +306,18 @@ def render_plain_email(idx: int, text: str):
         template
         .replace("%%IDX%%", str(idx))
         .replace("%%TEXT%%", escape(text))
-        .replace("%%BG%%", THEME_BG)
-        .replace("%%TX%%", THEME_TX)
-        .replace("%%BORDER%%", BORDER_RG)
-        .replace("%%BTN_BG%%", BTN_BG)
+        .replace("%%BG%%", THEME_BG).replace("%%TX%%", THEME_TX)
+        .replace("%%BORDER%%", BORDER_RG).replace("%%BTN_BG%%", BTN_BG)
         .replace("%%AREA_BG%%", AREA_BG)
+        .replace("%%FS_DESKTOP%%", EMAIL_FONT_SIZE_DESKTOP)
+        .replace("%%FS_MOBILE%%", EMAIL_FONT_SIZE_MOBILE)
+        .replace("%%LH%%", str(EMAIL_LINE_HEIGHT))
+        .replace("%%H_DESKTOP%%", str(EMAIL_BOX_DESKTOP_HEIGHT))
     )
 
-    # ✅ Height already over-estimated, so Download button kabhi overlap nahi karega
-    components.html(html, height=height, scrolling=False)
+    # Initial safe height (mobile + desktop estimate). JS will tighten exactly.
+    components.html(html, height=initial_height, scrolling=False)
+
 
 # --------------------- HERO ---------------------
 st.markdown(
