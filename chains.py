@@ -141,24 +141,24 @@ Return ONLY JSON (no extra text)."""
     # -------------------- WRITE EMAIL --------------------
     def write_mail(self, job: dict, links: List[str]) -> str:
         """Generate cold email using Groq first, fallback to Gemini."""
-        prompt = PromptTemplate.from_template(
-            """You are Mohan, a Business Development Executive at AtliQ (an AI & Software Consulting company).
-
-Write a concise, professional **plain text** cold email about the job below.
-RULES:
-- Plain text only: no headings, no lists, no bullets, no markdown symbols (#, *, -, >, _, `, [], ()).
-- 120–170 words total.
-- Start with a clear "Subject: ..." line.
-- Then a greeting (e.g., Dear Hiring Manager,).
-- Mention AtliQ’s capabilities relevant to the job.
-- Include 1–2 relevant portfolio links inline (full URLs), woven naturally in a sentence.
-- End with a clear call-to-action and a polite sign-off.
-- Return ONLY the email body; no extra notes.
-
-JOB:
+        prompt_email = PromptTemplate.from_template(
+    """### JOB DESCRIPTION:
 {job_description}
 
-        )
+### INSTRUCTION:
+You are Mohan, BDE at AtliQ (AI & Software Consulting).
+Write a short, well-structured **plain text cold email** — 
+without Markdown formatting, hashtags, asterisks, or special symbols.
+
+The email should include:
+- A short subject line
+- A polite greeting
+- A professional introduction (about AtliQ)
+- Mention of relevant expertise (based on the job)
+- A clear closing line (call to action like scheduling a call)
+
+Return only clean plain text, no formatting characters or symbols."""
+)
 
         attempts = []
 
