@@ -152,7 +152,7 @@ def download_name(prefix="email", ext="txt"):
 def render_plain_email(idx: int, text: str):
     """
     Email textarea + working Copy button rendered in an iframe with Streamlit theme colors.
-    Scrollbar visible (white color), works in both dark & light themes.
+    Scrollbar visible (white color), only vertical scroll allowed.
     """
     template = """<!doctype html>
 <html>
@@ -160,11 +160,13 @@ def render_plain_email(idx: int, text: str):
     <meta charset="utf-8"/>
     <style>
       html,body{
-        margin:0;padding:0;
+        margin:0;
+        padding:0;
         background:%%BG%%;
         color:%%TX%%;
         font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial,'Noto Sans',sans-serif;
         overflow-y:auto;
+        overflow-x:hidden;
       }
       .toolbar{
         display:flex;
@@ -193,6 +195,9 @@ def render_plain_email(idx: int, text: str):
         font: 0.92rem/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
         resize:vertical;
         overflow-y:scroll;
+        overflow-x:hidden;  /* 🚫 disable horizontal scroll */
+        white-space:pre-wrap; /* wrap long lines instead of horizontal scrolling */
+        word-wrap:break-word;
       }
 
       /* --- White Scrollbar --- */
@@ -255,8 +260,6 @@ def render_plain_email(idx: int, text: str):
     )
 
     components.html(html, height=380, scrolling=True)
-
-
 
 
 # --------------------- HERO ---------------------
