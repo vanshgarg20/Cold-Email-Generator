@@ -76,7 +76,7 @@ pre, pre code { white-space: pre-wrap !important; word-break: break-word !import
     unsafe_allow_html=True,
 )
 
-# ---- THEME COLORS (fallbacks if theme not set) ----
+# ---- THEME COLORS (fallbacks) ----
 BASE = (st.get_option("theme.base") or "dark").lower()
 THEME_BG  = st.get_option("theme.backgroundColor") or ("#0E1117" if BASE == "dark" else "#FFFFFF")
 THEME_TX  = st.get_option("theme.textColor")       or ("#FAFAFA" if BASE == "dark" else "#0B0B0B")
@@ -84,6 +84,13 @@ THEME_SEC = st.get_option("theme.secondaryBackgroundColor") or ("#262730" if BAS
 BORDER_RG = "rgba(255,255,255,.15)" if BASE == "dark" else "rgba(0,0,0,.12)"
 BTN_BG    = "rgba(255,255,255,.08)" if BASE == "dark" else "rgba(0,0,0,.05)"
 AREA_BG   = "rgba(255,255,255,.03)" if BASE == "dark" else "rgba(0,0,0,.02)"
+
+# ---- Email box knobs (customize here) ----
+EMAIL_BOX_DESKTOP_HEIGHT = 300   # Medium box height on desktop
+EMAIL_BOX_RADIUS         = 12    # Border radius of the email container
+EMAIL_FONT_SIZE_DESKTOP  = "0.92rem"
+EMAIL_FONT_SIZE_MOBILE   = "0.98rem"
+EMAIL_LINE_HEIGHT        = "1.5" # Line-height both views
 
 
 # --------------------- SIDEBAR ---------------------
@@ -149,10 +156,16 @@ def render_skill_chips(skills: List[str]):
 def download_name(prefix="email", ext="txt"):
     return f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
 
+import streamlit.components.v1 as components
+from html import escape
+
 def render_plain_email(idx: int, text: str):
     """
-    Plain email box — desktop pe medium size; phone pe content ke hisaab se
-    auto-expand (no inner scroll). Iframe height JS se auto-resize hoti hai.
+    Responsive email viewer with working Copy:
+    - Desktop: fixed medium height (customizable), no inner scroll.
+      Content is fully visible because the iframe auto-resizes to the block's height.
+    - Mobile: auto-expands to fit the full email (no clipping, no inner scroll).
+    - No focus outline/border glitch; theme colors applied.
     """
     template = """<!doctype html>
 <html>
@@ -166,83 +179,117 @@ def render_plain_email(idx: int, text: str):
         --border: %%BORDER%%;
         --btnbg: %%BTN_BG%%;
         --areabg: %%AREA_BG%%;
+        --radius: %%RADIUS%%px;
+        --fs-d: %%FS_DESKTOP%%;
+        --fs-m: %%FS_MOBILE%%;
+        --lh: %%LH%%;
+        --h-d: %%H_DESKTOP%%px;
       }
       html,body{
-        margin:0;padding:0;background:var(--bg);color:var(--tx);
+        margin:0; padding:0;
+        background:var(--bg); color:var(--tx);
         font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial,'Noto Sans',sans-serif;
-        overflow-x:hidden; /* no sideways scroll */
+        overflow-x:hidden;
+      }
+      .wrap{
+        width:100%;
       }
       .toolbar{
-        display:flex;justify-content:flex-end;margin-bottom:6px;
+        display:flex; justify-content:flex-end; gap:.5rem;
+        margin:0 0 8px 0;
       }
       .btn{
-        border:1px solid var(--border);background:var(--btnbg);color:var(--tx);
-        padding:.35rem .7rem;border-radius:8px;cursor:pointer;font-size:.9rem;
+        border:1px solid var(--border); background:var(--btnbg); color:var(--tx);
+        padding:.35rem .7rem; border-radius:8px; cursor:pointer; font-size:.9rem;
       }
-      .btn:active{transform:translateY(1px)}
+      .btn:active{ transform:translateY(1px); }
 
-      /* Textarea defaults: desktop medium */
-      textarea{
-        width:100%;
-        height:300px;               /* desktop medium default */
+      /* Email block (non-focusable, no outline) */
+      .emailbox{
+        background:var(--areabg);
         border:1px solid var(--border);
-        background:var(--areabg); color:var(--tx); border-radius:12px;
-        padding:.75rem;
-        font:0.92rem/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
-        white-space:pre-wrap; word-wrap:break-word;
-        resize:none;                /* no grab-resizer */
-        overflow:hidden;            /* no inner scrollbars */
+        border-radius:var(--radius);
+        padding:14px;
+        margin:0 0 12px 0;          /* space above Download button (fixes desktop cut) */
+        font: var(--fs-d)/var(--lh) ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+        white-space:pre-wrap;
+        word-break:break-word;
+        overflow-wrap:anywhere;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .emailbox:focus, .emailbox:focus-visible{ outline:0; box-shadow:none; }
+
+      /* Desktop default height (visual medium box) */
+      @media (min-width:601px){
+        .emailbox{
+          max-height:none;
+          min-height:var(--h-d);
+        }
       }
 
-      /* Phone: let box auto-expand by content (height set via JS) */
+      /* Mobile: comfortable font & full height by content */
       @media (max-width:600px){
-        textarea{
-          height:auto;              /* JS will set exact height */
-          font-size:0.98rem;
-          line-height:1.5;
+        .emailbox{
+          font-size:var(--fs-m);
+          line-height:var(--lh);
+          padding:16px 14px;
         }
+      }
+
+      /* Hidden textarea for exact-copy */
+      textarea.hidden-copy{
+        position:absolute; left:-9999px; top:-9999px; height:0; width:0; opacity:0;
       }
     </style>
   </head>
   <body>
-    <div class="toolbar">
-      <button id="copy_btn_%%IDX%%" class="btn">Copy</button>
+    <div class="wrap">
+      <div class="toolbar">
+        <button id="copy_btn_%%IDX%%" class="btn">Copy</button>
+      </div>
+
+      <!-- Email content -->
+      <pre id="email_view_%%IDX%%" class="emailbox">%%TEXT%%</pre>
+      <!-- Hidden source used for copy to preserve linebreaks exactly -->
+      <textarea id="copy_src_%%IDX%%" class="hidden-copy" readonly>%%TEXT%%</textarea>
     </div>
-    <textarea id="email_%%IDX%%" readonly>%%TEXT%%</textarea>
 
     <script>
       (function(){
-        const ta  = document.getElementById('email_%%IDX%%');
         const btn = document.getElementById('copy_btn_%%IDX%%');
+        const src = document.getElementById('copy_src_%%IDX%%');
+        const view = document.getElementById('email_view_%%IDX%%');
 
-        // Copy logic
-        if (btn && ta){
+        // Copy using hidden textarea (works everywhere, preserves formatting)
+        if (btn && src){
           btn.addEventListener('click', async () => {
             try{
-              await navigator.clipboard.writeText(ta.value);
+              src.focus(); src.select();
+              const ok = document.execCommand('copy');
+              if (!ok && navigator.clipboard) {
+                await navigator.clipboard.writeText(src.value);
+              }
               const old = btn.innerText; btn.innerText = 'Copied!';
-              setTimeout(()=>btn.innerText = old, 1200);
+              setTimeout(()=>btn.innerText = old, 1100);
             }catch(e){ console.error('Copy failed', e); }
           });
         }
 
-        // Auto-resize textarea to fit content (no scroll)
-        function autoSize(){
-          if(!ta) return;
-          ta.style.height = 'auto';
-          ta.style.height = (ta.scrollHeight) + 'px';
-          // Also resize iframe so Streamlit doesn't clip on phone
+        // Ensure the iframe always fits content (desktop & mobile) — no clipping
+        function fitFrame() {
           try {
-            const h = document.body.scrollHeight + 8;         // padding
+            const h = document.body.scrollHeight + 8; // little padding
             if (window.frameElement) window.frameElement.style.height = h + 'px';
             document.documentElement.style.height = h + 'px';
-          } catch(_) {}
+          } catch (_) {}
         }
 
-        // Run on load + after fonts render
-        window.addEventListener('load', autoSize);
-        setTimeout(autoSize, 50);
-        setTimeout(autoSize, 300);
+        // Observe size changes (fonts/rendering/viewport)
+        const ro = new ResizeObserver(fitFrame);
+        ro.observe(document.body);
+        window.addEventListener('load', fitFrame);
+        setTimeout(fitFrame, 50);
+        setTimeout(fitFrame, 300);
       })();
     </script>
   </body>
@@ -257,10 +304,16 @@ def render_plain_email(idx: int, text: str):
         .replace("%%BORDER%%", BORDER_RG)
         .replace("%%BTN_BG%%", BTN_BG)
         .replace("%%AREA_BG%%", AREA_BG)
+        .replace("%%RADIUS%%", str(EMAIL_BOX_RADIUS))
+        .replace("%%FS_DESKTOP%%", EMAIL_FONT_SIZE_DESKTOP)
+        .replace("%%FS_MOBILE%%", EMAIL_FONT_SIZE_MOBILE)
+        .replace("%%LH%%", EMAIL_LINE_HEIGHT)
+        .replace("%%H_DESKTOP%%", str(EMAIL_BOX_DESKTOP_HEIGHT))
     )
 
-    # Give initial room; inside JS we auto-resize the iframe height to match content.
-    components.html(html, height=380, scrolling=False)
+    # Give initial space; iframe will then auto-resize to real height (no cut on desktop/mobile).
+    components.html(html, height=EMAIL_BOX_DESKTOP_HEIGHT + 120, scrolling=False)
+
 
 
 
