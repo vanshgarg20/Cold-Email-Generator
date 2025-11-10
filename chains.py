@@ -142,15 +142,16 @@ Return ONLY JSON (no extra text)."""
     def write_mail(self, job: dict, links: List[str]) -> str:
         """Generate cold email using Groq first, fallback to Gemini."""
         prompt = PromptTemplate.from_template(
-            """### JOB DESCRIPTION:
+    """### JOB DESCRIPTION:
 {job_description}
 
 ### INSTRUCTION:
-You are Mohan, BDE at AtliQ (AI & Software Consulting).
-Write a short, persuasive cold email to the company.
-Include relevant portfolio links: {link_list}.
-Return ONLY the email in Markdown, no preamble."""
-        )
+You are Mohan, a Business Development Executive at AtliQ, an AI & Software Consulting company.
+Write a short, professional cold email to the company about the job above.
+Keep the tone natural and business-friendly — no Markdown, no headings, no bullet points, no hashtags, no special formatting.
+Include relevant portfolio links naturally within the email text.
+Return only plain text — a single email body ready to send."""
+)
 
         attempts = []
 
