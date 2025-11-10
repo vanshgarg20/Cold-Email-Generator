@@ -216,47 +216,52 @@ def _estimate_iframe_height_for(text: str) -> int:
 from html import escape
 import streamlit as st
 
-def render_plain_email(idx: int, text: str):
-    """
-    Simple, responsive email block with working Copy.
-    No iframe, no spacing bugs — this was your original stable version.
-    """
+from html import escape
+import streamlit as st
+
+def render_plain_email(idx: int, text: str) -> None:
+    """Plain email viewer with a Copy button (no <script> tag, no page jump)."""
     st.markdown(
         f"""
-        <div class="plain-email" id="email_wrap_{idx}">
-          <div class="email-toolbar">
-            <button class="copy-btn" id="copy_btn_{idx}">Copy</button>
-          </div>
-          <pre class="emailbox" id="email_view_{idx}">{escape(text)}</pre>
-          <textarea id="copy_src_{idx}" class="hidden-copy" readonly>{escape(text)}</textarea>
-        </div>
-
-        <script>
-        (function() {{
-          const btn = document.getElementById("copy_btn_{idx}");
-          const src = document.getElementById("copy_src_{idx}");
-          if (btn && src) {{
-            btn.addEventListener("click", async () => {{
-              try {{
-                src.focus();
-                src.select();
-                const ok = document.execCommand("copy");
-                if (!ok && navigator.clipboard) {{
-                  await navigator.clipboard.writeText(src.value);
-                }}
-                const old = btn.innerText;
-                btn.innerText = "Copied!";
-                setTimeout(() => btn.innerText = old, 1100);
-              }} catch (e) {{
-                console.error("Copy failed", e);
-              }}
-            }});
+<div class="plain-email" id="email_wrap_{idx}">
+  <div class="email-toolbar">
+    <button class="copy-btn" id="copy_btn_{idx}" type="button"
+      onclick="(function(){{
+        try {{
+          var el = document.getElementById('email_{idx}');
+          var txt = el ? (el.textContent || el.value) : '';
+          if (navigator.clipboard && window.isSecureContext) {{
+            navigator.clipboard.writeText(txt);
+          }} else {{
+            // Fallback copy without scrolling
+            var ta = document.createElement('textarea');
+            ta.value = txt;
+            ta.style.position='fixed';
+            ta.style.top='-1000px';
+            ta.style.left='-1000px';
+            document.body.appendChild(ta);
+            ta.focus({{preventScroll:true}});
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
           }}
-        }})();
-        </script>
-        """,
+          var b = document.getElementById('copy_btn_{idx}');
+          var old = b.innerText;
+          b.innerText = 'Copied!';
+          setTimeout(function(){{ b.innerText = old; }}, 1100);
+        }} catch(e) {{
+          console.error('Copy failed', e);
+        }}
+      }})()"
+    >Copy</button>
+  </div>
+
+  <pre class="emailbox" id="email_{idx}">{escape(text)}</pre>
+</div>
+""",
         unsafe_allow_html=True,
     )
+
 
 # --------------------- HERO ---------------------
 st.markdown(
