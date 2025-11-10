@@ -140,54 +140,39 @@ Return ONLY JSON (no extra text)."""
 
     # -------------------- WRITE EMAIL --------------------
     def write_mail(self, job: dict, links: List[str]) -> str:
-        """Generate cold email using Groq first, fallback to Gemini."""
-        prompt_email = PromptTemplate.from_template(
-    """### JOB DESCRIPTION:
+    prompt_email = PromptTemplate.from_template(
+        """### JOB DESCRIPTION:
 {job_description}
 
 ### INSTRUCTION:
 You are Mohan, BDE at AtliQ (AI & Software Consulting).
-Write a short, well-structured **plain text cold email** — 
-without Markdown formatting, hashtags, asterisks, or special symbols.
+Write a short, well-structured plain text cold email — no Markdown, no hashtags.
+Include: subject, greeting, intro, relevant expertise, clear CTA.
+Return only clean plain text."""
+    )
 
-The email should include:
-- A short subject line
-- A polite greeting
-- A professional introduction (about AtliQ)
-- Mention of relevant expertise (based on the job)
-- A clear closing line (call to action like scheduling a call)
+    attempts = []
+    if self.heavy_key:
+        attempts.append(("groq", self.heavy_key, self.heavy_model))
+    if self.fast_key:
+        attempts.append(("groq", self.fast_key, self.fast_model))
+    if self.gemini_key:
+        attempts.append(("gemini", self.gemini_key, self.gemini_model))
 
-Return only clean plain text, no formatting characters or symbols."""
-)
+    last_error = None
+    for provider, api_key, model in attempts:
+        try:
+            llm = _make_groq_llm(api_key, model) if provider == "groq" else _make_gemini_llm(api_key, model)
+            # ✅ use the correct variable here
+            chain_email = prompt_email | llm
+            res = _invoke_with_retry(
+                chain_email,
+                {"job_description": str(job)},
+                retries=1,
+            )
+            return getattr(res, "content", str(res))
+        except Exception as e:
+            last_error = e
+            continue
 
-        attempts = []
-
-        # Groq heavy first, then fast
-        if self.heavy_key:
-            attempts.append(("groq", self.heavy_key, self.heavy_model))
-        if self.fast_key:
-            attempts.append(("groq", self.fast_key, self.fast_model))
-
-        # Gemini fallback
-        if self.gemini_key:
-            attempts.append(("gemini", self.gemini_key, self.gemini_model))
-
-        last_error = None
-        for provider, api_key, model in attempts:
-            try:
-                if provider == "groq":
-                    llm = _make_groq_llm(api_key, model)
-                else:
-                    llm = _make_gemini_llm(api_key, model)
-                chain = prompt | llm
-                res = _invoke_with_retry(
-                    chain,
-                    {"job_description": str(job)},
-                    retries=1,
-                )
-                return getattr(res, "content", str(res))
-            except Exception as e:
-                last_error = e
-                continue
-
-        raise last_error or RuntimeError("❌ Email writing failed on all providers.")
+    raise last_error or RuntimeError("❌ Email writing failed on all providers.")
