@@ -14,11 +14,13 @@ from utils import clean_text
 # --------------------- PAGE CONFIG ---------------------
 st.set_page_config(page_title="Cold Email Generator", page_icon="📧", layout="wide")
 
-# --------------------- SESSION INIT ---------------------
+# --------------------- ONE-TIME STATE ---------------------
 if "chain" not in st.session_state:
     st.session_state["chain"] = Chain()
+
 if "portfolio" not in st.session_state:
-    st.session_state["portfolio"] = Portfolio(csv_path="my_portfolio.csv")
+    csv_path = "my_portfolio.csv"  # repo root
+    st.session_state["portfolio"] = Portfolio(csv_path=csv_path)
     with st.spinner("📚 Loading your portfolio…"):
         st.session_state["portfolio"].load_portfolio()
     st.toast("Portfolio loaded", icon="📁")
@@ -26,10 +28,11 @@ if "portfolio" not in st.session_state:
 chain: Chain = st.session_state["chain"]
 portfolio: Portfolio = st.session_state["portfolio"]
 
-# --------------------- STYLES (responsive; same as you used) ---------------------
+# --------------------- STYLES (base + responsive + copy button) ---------------------
 st.markdown(
     """
 <style>
+/* base layout */
 .block-container{max-width:1200px;padding-top:3.75rem;padding-bottom:3rem;overflow:visible}
 @keyframes pulseGradient{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 .hero-wrap{display:inline-flex;align-items:center;gap:.9rem;margin:.25rem auto .4rem;position:relative;left:50%;transform:translateX(-50%);overflow:visible}
@@ -44,9 +47,27 @@ hr{border:none;height:1px;background:linear-gradient(90deg,transparent,rgba(255,
 .stTextInput > div > div > input{height:3rem;font-size:1rem}
 pre, pre code { white-space: pre-wrap !important; word-break: break-word !important }
 
+/* copyable plain email block */
+.plain-email{margin-top:.5rem}
+.plain-email .email-toolbar{display:flex;justify-content:flex-end;gap:.5rem;margin-bottom:.4rem}
+.copy-btn{
+  border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.08);
+  padding:.35rem .7rem;border-radius:8px;cursor:pointer;
+}
+.copy-btn:active{transform:translateY(1px)}
+.plain-email textarea{
+  width:100%;height:300px; /* keep scrollbar */
+  border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.03);
+  color:inherit;border-radius:12px;padding:.75rem;
+  font: 0.92rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  resize:vertical; /* user can resize; scrollbar stays */
+}
+
 /* tablets */
 @media (max-width: 900px){
-  .block-container{max-width:100%;padding-top:2.5rem;padding-left:1rem;padding-right:1rem}
+  .block-container{max-width:100%;padding-top:2.9rem;padding-left:1rem;padding-right:1rem}
   .hero-logo{width:48px;height:48px;padding:5px}
   .hero-logo svg{width:28px;height:28px}
   .hero-title{font-size:2.2rem;white-space:normal}
@@ -57,13 +78,13 @@ pre, pre code { white-space: pre-wrap !important; word-break: break-word !import
   .stTextInput > div > div > input{height:2.6rem;font-size:.95rem}
 }
 
-/* phones */
+/* phones - extra top padding to prevent title clipping under Streamlit header */
 @media (max-width: 600px){
-  .block-container{padding-top:1.5rem;padding-left:.75rem;padding-right:.75rem}
+  .block-container{padding-top:3.3rem;padding-left:.75rem;padding-right:.75rem}
   .hero-wrap{gap:.6rem}
   .hero-logo{width:40px;height:40px;padding:4px;border-radius:10px}
   .hero-logo svg{width:22px;height:22px}
-  .hero-title{font-size:1.6rem;line-height:1.15}
+  .hero-title{font-size:1.55rem;line-height:1.22}
   .hero-sub{font-size:.95rem;margin-bottom:1.1rem}
   .card{padding:.85rem;border-radius:14px}
   .chip{font-size:.75rem;padding:.22rem .5rem}
@@ -71,13 +92,14 @@ pre, pre code { white-space: pre-wrap !important; word-break: break-word !import
   .stTextInput > div > div > input{height:2.4rem;font-size:.95rem}
   section.main .stColumns { flex-direction: column !important; gap: .75rem !important }
   .stButton > button, .stDownloadButton > button { width:100% !important }
+  .plain-email textarea{height:260px}
 }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-# --------------------- Sidebar ---------------------
+# --------------------- SIDEBAR ---------------------
 with st.sidebar:
     st.header("⚙️ Settings")
     st.write("Paste a job post URL, choose your email tone and call-to-action, and generate a personalized cold email.")
@@ -102,8 +124,22 @@ with st.sidebar:
             st.session_state["preset_url"] = PRESETS[preset_choice]
             st.toast(f"Loaded preset: {preset_choice}", icon="✅")
 
-# --------------------- Helpers ---------------------
+# --------------------- HELPERS ---------------------
 URL_RE = re.compile(r"^https?://", re.IGNORECASE)
+
+def to_plain_text(s: str) -> str:
+    """Convert potential markdown-ish output to plain text."""
+    s = re.sub(r"```.*?```", "", s, flags=re.S)                 # fenced code blocks
+    s = re.sub(r"`([^`]*)`", r"\1", s)                          # inline code
+    s = re.sub(r"!\[.*?\]\(.*?\)", "", s)                       # images
+    s = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1", s)                 # links → text
+    s = re.sub(r"[*_]{1,3}([^*_]+)[*_]{1,3}", r"\1", s)         # bold/italics
+    s = re.sub(r"^\s{0,3}#{1,6}\s*", "", s, flags=re.M)         # headings
+    s = re.sub(r"^\s{0,3}>\s*", "", s, flags=re.M)              # blockquotes
+    s = re.sub(r"^\s*[-*_]{3,}\s*$", "", s, flags=re.M)         # horizontal rules
+    s = re.sub(r"^\s*[-*•+]\s+", "", s, flags=re.M)             # bullets
+    s = re.sub(r"\n{3,}", "\n\n", s)                            # collapse blanks
+    return s.strip()
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_and_clean(url: str) -> str:
@@ -127,29 +163,24 @@ def render_skill_chips(skills: List[str]):
 def download_name(prefix="email", ext="txt"):
     return f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
 
-# Remove Markdown artifacts → plain text
-_MD_HEADERS = re.compile(r"^\s{0,3}#{1,6}\s*", re.MULTILINE)
-_MD_BULLETS = re.compile(r"^\s*[-*+•]\s+", re.MULTILINE)
-_MD_BQ = re.compile(r"^\s*>\s?", re.MULTILINE)
-_MD_CODE = re.compile(r"`{1,3}([^`]+)`{1,3}")
-_MD_LINKS = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
-_MD_EMPH = re.compile(r"[*_]{1,3}([^*_]+)[*_]{1,3}")
-_FENCE = re.compile(r"```.*?```", re.DOTALL)
-_IMG = re.compile(r"!\[.*?\]\(.*?\)")
+def render_plain_email(idx: int, text: str):
+    """Show the email in a readonly <textarea> with a Copy button (client-side clipboard)."""
+    st.markdown(
+        f"""
+        <div class="plain-email">
+          <div class="email-toolbar">
+            <button class="copy-btn" onclick="
+              navigator.clipboard.writeText(document.getElementById('email_{idx}').value);
+              const b=this;const t=b.innerText;b.innerText='Copied!';setTimeout(()=>b.innerText=t,1300);
+            ">Copy</button>
+          </div>
+          <textarea id="email_{idx}" readonly>{escape(text)}</textarea>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-def to_plain_text(md: str) -> str:
-    t = _FENCE.sub("", md)
-    t = _IMG.sub("", t)
-    t = _MD_CODE.sub(r"\1", t)
-    t = _MD_LINKS.sub(r"\1", t)
-    t = _MD_EMPH.sub(r"\1", t)
-    t = _MD_HEADERS.sub("", t)
-    t = _MD_BULLETS.sub("", t)
-    t = _MD_BQ.sub("", t)
-    t = re.sub(r"\n{3,}", "\n\n", t)
-    return t.strip()
-
-# --------------------- Hero ---------------------
+# --------------------- HERO ---------------------
 st.markdown(
     """
     <div class="hero-wrap">
@@ -172,7 +203,7 @@ with col1:
 with col2:
     generate = st.button("🚀 Generate", type="primary", use_container_width=True)
 
-# --------------------- Main ---------------------
+# --------------------- MAIN ---------------------
 if generate:
     if not url_input.strip() or not URL_RE.match(url_input.strip()):
         st.error("Please enter a valid `http(s)://` URL.")
@@ -195,12 +226,15 @@ if generate:
                 exp = job.get("experience", "N/A")
                 skills = normalize_skills(job.get("skills", []))
 
+                # Header with badges
                 st.markdown(
                     f"### #{i} — {escape(role)} "
-                    f"<span class='badge'>{escape(st.session_state.get('tone', '')) or escape('' )}</span>",
+                    f"<span class='badge'>{escape(tone_choice)}</span>"
+                    f"<span class='badge'>{escape(cta_choice)}</span>",
                     unsafe_allow_html=True,
                 )
 
+                # Job summary card
                 st.markdown("<div class='card'>", unsafe_allow_html=True)
                 st.subheader("Summary", anchor=False)
                 st.write(desc)
@@ -209,33 +243,33 @@ if generate:
                 render_skill_chips(skills)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # Preferences passed inside job (tone/cta) — optional
+                # Ask LLM to write (links intentionally empty; email should be plain text)
                 job_with_prefs = {**job, "tone": tone_choice, "cta": cta_choice}
                 with st.spinner("✍️ Writing tailored email…"):
-                    email_raw = chain.write_mail(job_with_prefs, [])
+                    email_md = chain.write_mail(job_with_prefs, [])
 
-                # Force plain text view + download
-                email_txt = to_plain_text(email_raw)
+                # Plain text conversion + UI
+                email_txt = to_plain_text(email_md)
+                render_plain_email(i, email_txt)
 
-                st.text_area(
-                    label="Generated Email (plain text)",
-                    value=email_txt,
-                    height=300,
-                    key=f"email_text_{i}",
-                )
+                # Download .txt
                 st.download_button(
                     label="⬇️ Download Email (.txt)",
                     data=email_txt,
                     file_name=download_name(ext="txt"),
                     mime="text/plain",
                     use_container_width=True,
-                    key=f"download_btn_{i}",
+                    key=f"download_email_{i}",
                 )
+
                 st.markdown("<hr />", unsafe_allow_html=True)
 
         except Exception as e:
             msg = str(e).lower()
-            if "rate" in msg or "429" in msg or "quota" in msg:
-                st.error("🚦 Rate limit reached. Try again a little later or switch model/key.")
+            if "rate limit" in msg or "429" in msg:
+                st.error(
+                    "🚦 Groq rate limit reached for your org. Please try again later, "
+                    "or switch to a smaller model / separate API key."
+                )
             else:
                 st.error(f"⚠️ An error occurred: {e}")
