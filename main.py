@@ -219,49 +219,48 @@ import streamlit as st
 from html import escape
 import streamlit as st
 
-def render_plain_email(idx: int, text: str) -> None:
-    """Email box with Copy button inside the top-right corner (clean old style)."""
+from html import escape
+import streamlit as st
+
+def render_plain_email(idx: int, text: str):
+    """Simple, responsive email block with working Copy. No iframe, so no spacing bugs."""
     st.markdown(
         f"""
-<div class="plain-email" id="email_wrap_{idx}">
-  <div class="emailbox">
-    <div style="display:flex; justify-content:flex-end; margin-bottom:6px;">
-      <button class="copy-btn" id="copy_btn_{idx}" type="button"
-        onclick="(function(){{
-          try {{
-            var el = document.getElementById('email_text_{idx}');
-            var txt = el ? (el.textContent || el.value) : '';
-            if (navigator.clipboard && window.isSecureContext) {{
-              navigator.clipboard.writeText(txt);
-            }} else {{
-              var ta = document.createElement('textarea');
-              ta.value = txt;
-              ta.style.position='fixed';
-              ta.style.top='-1000px';
-              ta.style.left='-1000px';
-              document.body.appendChild(ta);
-              ta.focus({{preventScroll:true}});
-              ta.select();
-              document.execCommand('copy');
-              document.body.removeChild(ta);
-            }}
-            var b = document.getElementById('copy_btn_{idx}');
-            var old = b.innerText;
-            b.innerText = 'Copied!';
-            setTimeout(function(){{ b.innerText = old; }}, 1100);
-          }} catch(e) {{
-            console.error('Copy failed', e);
-          }}
-        }})()"
-      >Copy</button>
-    </div>
+        <div class="plain-email" id="email_wrap_{idx}">
+          <div class="email-toolbar">
+            <button class="copy-btn" id="copy_btn_{idx}">Copy</button>
+          </div>
 
-    <pre id="email_text_{idx}" style="margin:0; white-space:pre-wrap; word-break:break-word;">
-{escape(text)}
-    </pre>
-  </div>
-</div>
-""",
+          <!-- Read-only email text (non-focus element, no scroll) -->
+          <pre class="emailbox" id="email_view_{idx}">{escape(text)}</pre>
+
+          <!-- Hidden source to preserve exact newlines when copying -->
+          <textarea id="copy_src_{idx}" class="hidden-copy" readonly>{escape(text)}</textarea>
+        </div>
+
+        <script>
+          (function(){{
+            const btn = document.getElementById("copy_btn_{idx}");
+            const src = document.getElementById("copy_src_{idx}");
+            if (btn && src) {{
+              btn.addEventListener("click", async () => {{
+                try {{
+                  src.focus(); src.select();
+                  const ok = document.execCommand("copy");
+                  if (!ok && navigator.clipboard) {{
+                    await navigator.clipboard.writeText(src.value);
+                  }}
+                  const old = btn.innerText;
+                  btn.innerText = "Copied!";
+                  setTimeout(() => btn.innerText = old, 1100);
+                }} catch (e) {{
+                  console.error("Copy failed", e);
+                }}
+              }});
+            }}
+          }})();
+        </script>
+        """,
         unsafe_allow_html=True,
     )
 
