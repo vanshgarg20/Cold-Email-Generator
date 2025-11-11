@@ -55,33 +55,52 @@ pre, pre code { white-space: pre-wrap !important; word-break: break-word !import
   margin-bottom:.2rem;
 }
 .emailbox{
-  background:#0b0b0b;                 /* dark black box */
-  border:1px solid rgba(255,255,255,.12);
+  background:#181a1f;  /* slightly lighter than full black (#0b0b0b) */
+  border:1px solid rgba(255,255,255,.10);
   border-radius:14px;
-  padding:14px 14px 16px;
+  padding:14px 16px 16px;
+  transition:background .25s ease;
+}
+.emailbox:hover{
+  background:#1e2026;  /* subtle hover effect */
 }
 .emailbox-toolbar{
-  display:flex; justify-content:flex-end; margin-bottom:6px;
+  display:flex;
+  justify-content:flex-end;
+  margin-bottom:6px;
 }
 .copy-btn{
   border:1px solid rgba(255,255,255,.18);
-  background:rgba(255,255,255,.08);
-  color:inherit; padding:.35rem .7rem; border-radius:8px;
-  cursor:pointer; font-size:.9rem;
+  background:rgba(255,255,255,.07);
+  color:inherit;
+  padding:.35rem .7rem;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:.9rem;
+  transition:all .2s ease;
+}
+.copy-btn:hover{
+  background:rgba(255,255,255,.12);
 }
 .copy-btn:active{ transform:translateY(1px) }
+
 .email-text{
-  white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere;
+  white-space:pre-wrap;
+  word-break:break-word;
+  overflow-wrap:anywhere;
   font:0.95rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
-/* small gap to download btn */
-div[data-testid="stDownloadButton"]{ margin-top:4px !important; }
+
+/* Tight gap before download button */
+div[data-testid="stDownloadButton"]{
+  margin-top:1px !important;
+}
+
 @media (max-width:600px){
   .emailbox{ padding:13px; }
   .email-text{ font-size:.98rem; line-height:1.55; }
   div[data-testid="stDownloadButton"]{ margin-top:4px !important; }
 }
-
 
 /* RESPONSIVE */
 @media (max-width: 900px){
@@ -244,48 +263,68 @@ from html import escape
 import streamlit as st
 from textwrap import dedent
 
+from html import escape
+import streamlit as st
+from textwrap import dedent
+
 def render_plain_email(idx: int, text: str) -> None:
-    """Dark email box with Copy button inside (no code-block issue)."""
+    """Smooth dark-gray email box with working Copy → Copied! animation."""
     html = f"""\
 <div class="plain-email" id="email_wrap_{idx}">
-<div class="emailbox">
-  <div class="emailbox-toolbar">
-    <button class="copy-btn" id="copy_btn_{idx}" type="button"
-      onclick="(function(){{
-        try {{
-          var el  = document.getElementById('email_text_{idx}');
-          var txt = el ? el.innerText : '';
-          if (navigator.clipboard && window.isSecureContext) {{
-            navigator.clipboard.writeText(txt);
-          }} else {{
-            var ta = document.createElement('textarea');
-            ta.value = txt;
-            ta.style.position='fixed';
-            ta.style.top='-1000px';
-            ta.style.left='-1000px';
-            document.body.appendChild(ta);
-            ta.focus({{preventScroll:true}});
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-          }}
-          var b = document.getElementById('copy_btn_{idx}');
-          var old = b.innerText;
-          b.innerText = 'Copied!';
-          setTimeout(function(){{ b.innerText = old; }}, 1100);
-        }} catch(e) {{
-          console.error('Copy failed', e);
-        }}
-      }})()"
-    >Copy</button>
+  <div class="emailbox">
+    <div class="emailbox-toolbar">
+      <button class="copy-btn" id="copy_btn_{idx}" type="button">Copy</button>
+    </div>
+    <div id="email_text_{idx}" class="email-text">{escape(text)}</div>
   </div>
+</div>
 
-  <div id="email_text_{idx}" class="email-text">{escape(text)}</div>
-</div>
-</div>
+<script>
+(function() {{
+  const btn = document.getElementById("copy_btn_{idx}");
+  const txtDiv = document.getElementById("email_text_{idx}");
+  if (!btn || !txtDiv) return;
+
+  btn.addEventListener("click", async (e) => {{
+    e.preventDefault();
+    e.stopPropagation();
+    const old = btn.innerText;
+    btn.disabled = true;
+
+    try {{
+      const text = txtDiv.innerText.trim();
+      if (navigator.clipboard && window.isSecureContext) {{
+        await navigator.clipboard.writeText(text);
+      }} else {{
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.top = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus({{preventScroll:true}});
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }}
+      btn.innerText = "Copied!";
+      setTimeout(() => {{
+        btn.innerText = old;
+        btn.disabled = false;
+      }}, 1000);
+    }} catch(err) {{
+      console.error("Copy failed", err);
+      btn.innerText = "Error";
+      setTimeout(() => {{
+        btn.innerText = old;
+        btn.disabled = false;
+      }}, 1000);
+    }}
+  }});
+}})();
+</script>
 """
-    # Remove any accidental indentation so Markdown doesn't make a code block.
     st.markdown(dedent(html), unsafe_allow_html=True)
+
 
 # --------------------- HERO ---------------------
 st.markdown(
